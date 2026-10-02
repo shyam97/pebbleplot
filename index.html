@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>pebbleplot</title>
+<script>
+// Apply saved theme and colour before first paint to avoid a flash.
+try {
+  var p = JSON.parse(localStorage.getItem('pebbleplot-prefs-v1') || 'null');
+  if (p && (p.theme === 'light' || p.theme === 'dark')) document.documentElement.dataset.theme = p.theme;
+  if (p && /^#[0-9A-Fa-f]{6}$/.test(p.color)) document.documentElement.style.setProperty('--peb', p.color);
+} catch (e) {}
+
+// Random pebble favicon, generated from r(theta) on every load.
+(function () {
+  var TAU = 2 * Math.PI, W = [0.3, 0.2, 0.1], K = [2, 3, 4], q = [];
+  for (var i = 0; i < 6; i++) q.push(Math.random());
+  var pts = [], N = 96, V = 1.7;
+  for (var j = 0; j < N; j++) {
+    var th = TAU * j / N, R = 1;
+    for (var m = 0; m < 3; m++) R += W[m] * q[2 * m] * Math.sin(K[m] * th + TAU * q[2 * m + 1]);
+    pts.push((R * Math.cos(th)).toFixed(3) + ' ' + (-R * Math.sin(th)).toFixed(3));
+  }
+  var d = 'M' + pts.join('L') + 'Z';
+  function darken(hex, t) {
+    var a = parseInt(hex.slice(1), 16), b = [28, 31, 59];
+    var c = [(a >> 16) & 255, (a >> 8) & 255, a & 255].map(function (v, k) { return Math.round(v + (b[k] - v) * t); });
+    return '#' + c.map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
+  }
+  function setLink(id, type, href) {
+    var l = document.getElementById(id);
+    if (!l) { l = document.createElement('link'); l.id = id; l.rel = 'icon'; l.type = type; document.head.appendChild(l); }
+    l.href = href;
+  }
+  window.__pebbleIcon = function (color) {
+    var rim = darken(color, 0.35);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + (-V) + ' ' + (-V) + ' ' + (2 * V) + ' ' + (2 * V) + '">' +
+              '<path d="' + d + '" fill="' + color + '" stroke="' + rim + '" stroke-width="0.14" stroke-linejoin="round"/></svg>';
+    // PNG first (Safari and older browsers), SVG last (Chrome, Firefox, Edge prefer it).
+    try {
+      var cv = document.createElement('canvas'); cv.width = cv.height = 64;
+      var ctx = cv.getContext('2d'), p = new Path2D(d);
+      ctx.translate(32, 32); ctx.scale(32 / V, 32 / V);
+      ctx.fillStyle = color; ctx.fill(p);
+      ctx.lineWidth = 0.14; ctx.lineJoin = 'round'; ctx.strokeStyle = rim; ctx.stroke(p);
+      setLink('fav-png', 'image/png', cv.toDataURL('image/png'));
+    } catch (e) {}
+    setLink('fav-svg', 'image/svg+xml', 'data:image/svg+xml,' + encodeURIComponent(svg));
+  };
+  var col = getComputedStyle(document.documentElement).getPropertyValue('--peb').trim();
+  window.__pebbleIcon(/^#[0-9A-Fa-f]{6}$/.test(col) ? col : '#A79BF7');
+})();
+</script>
+<style>
+:root{
+  --paper:#ECEEF6; --surface:#FFFFFF; --ink:#1C1F3B; --muted:#5B5F84; --grid:#CDD0E3;
+  --gridline:#9C9EA8; --peb:#A79BF7; --on-peb:#1C1F3B;
+  --mode2:#D9547F; --mode3:#1F8F80; --mode4:#C9821F; --warn:#B4373F;
+  --bar-h:56px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141629; --surface:#1C1F37; --ink:#E7E8F6; --muted:#A3A6C8; --grid:#34375A;
+    --gridline:#7A7C8A;
+    --mode2:#F07FA3; --mode3:#4FC7B5; --mode4:#E8AC52; --warn:#FF7A82;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141629; --surface:#1C1F37; --ink:#E7E8F6; --muted:#A3A6C8; --grid:#34375A;
+  --gridline:#7A7C8A;
+  --mode2:#F07FA3; --mode3:#4FC7B5; --mode4:#E8AC52; --warn:#FF7A82;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:calc(env(safe-area-inset-top,0px) + var(--bar-h));overflow-anchor:none}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 1rem/1.5 "Segoe UI",system-ui,-apple-system,Roboto,"Noto Sans",sans-serif;-webkit-text-size-adjust:100%}
+i.v{font-family:"STIX Two Text","Cambria Math","Times New Roman",serif;font-style:italic}
+
+/* ---------- top bar ---------- */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;height:var(--bar-h);background:var(--paper);border-bottom:1px solid var(--grid)}
+.bar-inner{max-width:1200px;height:100%;margin:0 auto;padding:0 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{margin:0;font:700 1.35rem/1 ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono","DejaVu Sans Mono",Menlo,Consolas,monospace;letter-spacing:-0.02em;color:var(--peb)}
+.tools{display:flex;align-items:center;gap:8px}
+.icon-btn{display:inline-grid;place-items:center;width:38px;height:38px;padding:0;border-radius:10px;border:1px solid var(--grid);background:var(--surface);color:var(--ink);cursor:pointer}
+.icon-btn:hover{border-color:var(--peb)}
+.icon-btn svg{width:20px;height:20px}
+.picker{position:relative}
+.dot{width:20px;height:20px;border-radius:50%;background:var(--peb);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.palette{position:absolute;right:0;top:calc(100% + 8px);display:grid;grid-template-columns:repeat(5,30px);gap:10px;padding:12px;background:var(--surface);border:1px solid var(--grid);border-radius:14px;box-shadow:0 10px 30px rgba(20,22,41,.18)}
+.palette[hidden]{display:none}
+.sw{width:30px;height:30px;border-radius:50%;border:0;padding:0;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.sw[aria-checked="true"]{outline:2px solid var(--ink);outline-offset:2px}
+
+.wrap{max-width:1200px;margin:0 auto;padding:14px 18px 24px}
+.eq{font-family:"STIX Two Text","Cambria Math","Times New Roman",serif;font-size:clamp(1.12rem,2.5vw,1.85rem);line-height:1.45;margin:0}
+.eq .t{display:inline-block;white-space:nowrap;border-bottom:3px solid transparent}
+.eq .t[data-k="2"]{border-color:color-mix(in srgb,var(--mode2) 55%,transparent)}
+.eq .t[data-k="3"]{border-color:color-mix(in srgb,var(--mode3) 55%,transparent)}
+.eq .t[data-k="4"]{border-color:color-mix(in srgb,var(--mode4) 55%,transparent)}
+.live{font-family:"STIX Two Text","Cambria Math",serif;color:var(--muted);font-size:clamp(.95rem,1.7vw,1.15rem);margin:4px 0 0;overflow-x:auto;white-space:nowrap}
+
+.layout{display:grid;gap:18px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:920px){.layout{grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr);align-items:start}}
+
+/* ---------- pinned column: equation block + pebble block ---------- */
+.pin{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--bar-h));z-index:10;background:var(--paper);padding:8px 0 6px;display:flex;flex-direction:column}
+@media (min-width:920px){.pin{align-self:start}}
+.eq-wrap{display:grid;grid-template-rows:1fr;margin-bottom:10px;opacity:1;transition:grid-template-rows .28s ease,margin-bottom .28s ease,opacity .2s ease,visibility 0s}
+.eq-inner{min-height:0;overflow:hidden}
+.eq-card{background:var(--surface);border:1px solid var(--grid);border-radius:16px;padding:12px 16px}
+.pin.collapsed .eq-wrap{grid-template-rows:0fr;margin-bottom:0;opacity:0;visibility:hidden;transition:grid-template-rows .28s ease,margin-bottom .28s ease,opacity .2s ease,visibility 0s .28s}
+@media (prefers-reduced-motion: reduce){.eq-wrap,.pin.collapsed .eq-wrap,svg.main{transition:none}}
+.stage{background:var(--surface);border:1px solid var(--grid);border-radius:22px;padding:10px}
+.figure{position:relative}
+svg.main{display:block;width:100%;height:auto;aspect-ratio:1/1;max-height:min(640px,calc(100vh - var(--bar-h) - 120px));margin:0 auto;color:var(--gridline);transition:max-height .28s ease}
+@media (min-width:920px){.pin:not(.collapsed) svg.main{max-height:min(640px,calc(100vh - var(--bar-h) - 270px))}}
+@media (max-width:919px){svg.main{max-height:36vh}}
+#blob{fill:var(--peb);fill-opacity:.6}
+#rim{fill:none;stroke:var(--peb);stroke-width:1.25;stroke-linejoin:round}
+#centroid{fill:var(--surface);stroke:var(--muted)}
+.m2{stroke:var(--mode2)} .m3{stroke:var(--mode3)} .m4{stroke:var(--mode4)}
+.stage-bar{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;padding:6px 6px 0;font-size:.86rem;color:var(--muted)}
+.stage-bar label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.warn{color:var(--warn);font-weight:500;font-size:.86rem;margin:2px 6px 0}
+.warn:empty{display:none}
+
+.dl{position:absolute;right:4px;bottom:4px;display:flex;align-items:center;gap:6px}
+.dl-menu{display:flex;gap:6px}
+.dl-menu[hidden]{display:none}
+.dl-menu button{font:600 .85rem ui-monospace,"SF Mono","DejaVu Sans Mono",Menlo,Consolas,monospace;height:38px;padding:0 12px;border-radius:10px;border:1px solid var(--grid);background:var(--surface);color:var(--ink);cursor:pointer}
+.dl-menu button:hover{border-color:var(--peb)}
+.dl .icon-btn[aria-expanded="true"]{background:var(--peb);color:var(--on-peb);border-color:transparent}
+
+/* ---------- controls ---------- */
+.panel{display:flex;flex-direction:column;gap:14px}
+.mode{background:var(--surface);border:1px solid var(--grid);border-left:5px solid var(--c);border-radius:6px 16px 16px 6px;padding:12px 14px 10px}
+.mode-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.mode-head .term{font-family:"STIX Two Text","Cambria Math",serif;font-size:1.15rem}
+.weight{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted)}
+.row{display:grid;grid-template-columns:2.2rem minmax(0,1fr) 4.6rem;gap:10px;align-items:center;padding:4px 0}
+.row .sym{font-family:"STIX Two Text","Cambria Math",serif;font-style:italic;font-size:1.45rem;text-align:center;line-height:1}
+.row .hint{grid-column:2/4;font-size:.8rem;color:var(--muted);margin-top:-6px}
+input[type=range]{width:100%;accent-color:var(--c,var(--peb));height:28px;margin:0}
+input[type=number]{width:100%;font:500 .92rem system-ui,sans-serif;color:var(--ink);background:var(--paper);border:1px solid var(--grid);border-radius:8px;padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums}
+.weight input[type=number]{width:4.4rem}
+input:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:500 .93rem system-ui,sans-serif;color:var(--ink);background:var(--surface);border:1px solid var(--grid);border-radius:10px;padding:.55rem .9rem;cursor:pointer}
+.btn:hover{border-color:var(--peb)}
+.btn.primary{background:var(--peb);color:var(--on-peb);border-color:transparent}
+.btn[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:transparent}
+
+.card{background:var(--surface);border:1px solid var(--grid);border-radius:16px;padding:12px 14px}
+.card h2{font:600 1rem/1.3 system-ui,sans-serif;margin:0 0 8px}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin:0}
+.stats div{display:flex;flex-direction:column}
+.stats dt{font-size:.82rem;color:var(--muted)}
+.stats dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums;font-size:1.05rem}
+.note{font-size:.82rem;color:var(--muted);margin:8px 0 0}
+.copyrow{display:flex;flex-wrap:wrap;gap:8px}
+.toast{font-size:.86rem;color:var(--muted);min-height:1.3em;margin:8px 0 0}
+
+.gallery-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.gallery-head h2{margin:0}
+.gallery{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.thumb{padding:4px;border-radius:12px;background:var(--paper);border:1px solid transparent;cursor:pointer;aspect-ratio:1/1}
+.thumb:hover{border-color:var(--peb)}
+.thumb svg{display:block;width:100%;height:100%}
+.thumb path{fill:var(--peb);fill-opacity:.6;stroke:var(--peb);stroke-width:1.5;vector-effect:non-scaling-stroke}
+
+.foot{text-align:center;color:var(--muted);font-size:.9rem;padding:32px 0 8px;margin:0}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-inner">
+    <h1 class="brand">pebbleplot</h1>
+    <div class="tools">
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Switch theme"></button>
+      <div class="picker">
+        <button class="icon-btn" id="colorBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="palette" aria-label="Pebble colour"><span class="dot"></span></button>
+        <div class="palette" id="palette" role="radiogroup" aria-label="Pebble colour" hidden></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div class="pin" id="pin">
+      <section class="eq-wrap" id="eqWrap" aria-label="Shape equation">
+        <div class="eq-inner">
+          <div class="eq-card">
+            <p class="eq" id="eq"></p>
+            <p class="live" id="live"></p>
+          </div>
+        </div>
+      </section>
+      <div class="stage">
+        <div class="figure">
+          <svg class="main" id="main" viewBox="-1.9 -1.9 3.8 3.8" role="img" aria-label="Shape defined by r of theta">
+            <defs>
+              <clipPath id="pebClip"><path id="clipShape"/></clipPath>
+              <mask id="outside" maskUnits="userSpaceOnUse" x="-50" y="-50" width="100" height="100">
+                <rect x="-50" y="-50" width="100" height="100" fill="#fff"/>
+                <path id="maskShape" fill="#000"/>
+              </mask>
+              <filter id="glass" x="-10%" y="-10%" width="120%" height="120%">
+                <feGaussianBlur id="glassBlur" stdDeviation="0.035"/>
+                <feComponentTransfer><feFuncA type="linear" slope="3.2"/></feComponentTransfer>
+              </filter>
+              <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#fff" stop-opacity=".42"/>
+                <stop offset=".45" stop-color="#fff" stop-opacity=".08"/>
+                <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <g mask="url(#outside)"><g id="grid"></g></g>
+            <g clip-path="url(#pebClip)"><use href="#grid" filter="url(#glass)"/></g>
+            <path id="blob"/>
+            <path id="sheenPath" fill="url(#sheen)"/>
+            <path id="rim" vector-effect="non-scaling-stroke"/>
+            <g id="modes"></g>
+            <circle id="centroid" r="0.025" stroke-width="1" vector-effect="non-scaling-stroke"/>
+          </svg>
+          <div class="dl">
+            <div class="dl-menu" id="dlMenu" hidden>
+              <button type="button" data-dl="svg">SVG</button>
+              <button type="button" data-dl="png">PNG</button>
+              <button type="button" data-dl="jpg">JPG</button>
+            </div>
+            <button class="icon-btn" id="dlBtn" type="button" aria-expanded="false" aria-controls="dlMenu" aria-label="Download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="stage-bar">
+          <label><input type="checkbox" id="showGrid" checked> Polar grid</label>
+          <label><input type="checkbox" id="showBase" checked> Base circle r = 1</label>
+          <label><input type="checkbox" id="showModes"> Each mode alone</label>
+        </div>
+        <p class="warn" id="warn" role="status"></p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="actions">
+        <button class="btn primary" id="randomize" type="button">Randomize</button>
+        <button class="btn" id="animate" type="button" aria-pressed="false">Animate phases</button>
+        <button class="btn" id="reset" type="button">Reset</button>
+      </div>
+
+      <div id="controls" class="panel"></div>
+
+      <section class="card" aria-labelledby="statsTitle">
+        <h2 id="statsTitle">Shape descriptors</h2>
+        <dl class="stats" id="stats"></dl>
+        <p class="note">Lengths are in units of the base radius. Circularity is 4πA/P² (1 for a circle). Solidity is the area divided by the convex-hull area. Aspect ratio is max over min Feret diameter.</p>
+      </section>
+
+      <section class="card" aria-labelledby="copyTitle">
+        <h2 id="copyTitle">Copy current shape</h2>
+        <div class="copyrow">
+          <button class="btn" type="button" data-copy="latex">LaTeX</button>
+          <button class="btn" type="button" data-copy="python">Python (NumPy)</button>
+          <button class="btn" type="button" data-copy="svg">SVG</button>
+          <button class="btn" type="button" data-copy="json">Parameters (JSON)</button>
+        </div>
+        <p class="toast" id="toast" aria-live="polite"></p>
+      </section>
+
+      <section class="card" aria-labelledby="galTitle">
+        <div class="gallery-head">
+          <h2 id="galTitle">Suggested shapes</h2>
+          <button class="btn" id="newSet" type="button">New set</button>
+        </div>
+        <div class="gallery" id="gallery"></div>
+        <p class="note">Tap a shape to load its parameters.</p>
+      </section>
+    </div>
+  </div>
+
+  <p class="foot">conceptualized by zeno239b15 🤡</p>
+</div>
+
+<script>
+(() => {
+  const TAU = 2 * Math.PI;
+  const MATHFONT = "'STIX Two Text','Cambria Math','Times New Roman',serif";
+  const MODES = [
+    { k: 2, amp: 'a', ph: 'b', color: 'var(--mode2)', cls: 'm2', tok: '--mode2' },
+    { k: 3, amp: 'c', ph: 'd', color: 'var(--mode3)', cls: 'm3', tok: '--mode3' },
+    { k: 4, amp: 'e', ph: 'f', color: 'var(--mode4)', cls: 'm4', tok: '--mode4' }
+  ];
+  const DEFAULT = { a: 0.6, b: 0.12, c: 0.55, d: 0.35, e: 0.5, f: 0.8, w2: 0.3, w3: 0.2, w4: 0.1 };
+  const PALETTE = [
+    ['Periwinkle', '#A79BF7'], ['Lilac', '#D2A8F2'], ['Blush', '#F4A6C6'], ['Peach', '#F7B79A'], ['Butter', '#F1D888'],
+    ['Pistachio', '#BCE0A2'], ['Mint', '#9ADFC6'], ['Aqua', '#94D4E6'], ['Sky', '#A2BEF4'], ['Coral', '#F2A3A0']
+  ];
+  const KEY = 'perturbed-circle-params-v1', PKEY = 'pebbleplot-prefs-v1';
+  const root = document.documentElement;
+  const $ = id => document.getElementById(id);
+  const fmt = (x, n = 3) => (Math.abs(x) < 5e-12 ? 0 : x).toFixed(n);
+  const trim = x => String(+x.toFixed(4));
+
+  // ---------- state ----------
+  let S = { ...DEFAULT };
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved && typeof saved === 'object') for (const k in DEFAULT) if (typeof saved[k] === 'number' && isFinite(saved[k])) S[k] = saved[k];
+  } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+  let prefs = { theme: null, color: PALETTE[0][1] };
+  try {
+    const p = JSON.parse(localStorage.getItem(PKEY) || 'null');
+    if (p) {
+      if (p.theme === 'light' || p.theme === 'dark') prefs.theme = p.theme;
+      if (PALETTE.some(x => x[1] === p.color)) prefs.color = p.color;
+    }
+  } catch (e) {}
+  const savePrefs = () => { try { localStorage.setItem(PKEY, JSON.stringify(prefs)); } catch (e) {} };
+
+  // ---------- theme ----------
+  const SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>';
+  const MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>';
+  const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : { matches: false };
+  const effTheme = () => prefs.theme || (mq.matches ? 'dark' : 'light');
+  function applyTheme() {
+    if (prefs.theme) root.dataset.theme = prefs.theme; else delete root.dataset.theme;
+    const dark = effTheme() === 'dark';
+    $('themeBtn').innerHTML = dark ? SUN : MOON;
+    $('themeBtn').setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+  }
+  $('themeBtn').addEventListener('click', () => { prefs.theme = effTheme() === 'dark' ? 'light' : 'dark'; savePrefs(); applyTheme(); });
+  if (mq.addEventListener) mq.addEventListener('change', () => { if (!prefs.theme) applyTheme(); });
+
+  // ---------- colour picker ----------
+  function setColor(hex) {
+    prefs.color = hex;
+    root.style.setProperty('--peb', hex);
+    savePrefs();
+    document.querySelectorAll('.sw').forEach(b => b.setAttribute('aria-checked', String(b.dataset.hex === hex)));
+    if (window.__pebbleIcon) window.__pebbleIcon(hex); // same random shape, new colour
+  }
+  function buildPalette() {
+    const pal = $('palette');
+    for (const [name, hex] of PALETTE) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'sw'; b.dataset.hex = hex; b.title = name;
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-label', name);
+      b.style.background = hex;
+      b.addEventListener('click', () => { setColor(hex); closePalette(); $('colorBtn').focus(); });
+      pal.appendChild(b);
+    }
+  }
+  const closePalette = () => { $('palette').hidden = true; $('colorBtn').setAttribute('aria-expanded', 'false'); };
+  const closeDl = () => { $('dlMenu').hidden = true; $('dlBtn').setAttribute('aria-expanded', 'false'); };
+  $('colorBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    const open = $('palette').hidden;
+    closeDl();
+    $('palette').hidden = !open; $('colorBtn').setAttribute('aria-expanded', String(open));
+    if (open) { const cur = $('palette').querySelector('[aria-checked="true"]'); if (cur) cur.focus(); }
+  });
+  $('dlBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    const open = $('dlMenu').hidden;
+    closePalette();
+    $('dlMenu').hidden = !open; $('dlBtn').setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.picker')) closePalette();
+    if (!e.target.closest('.dl')) closeDl();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePalette(); closeDl(); } });
+
+  // ---------- geometry ----------
+  function r(th, s) {
+    let v = 1;
+    for (const m of MODES) v += s['w' + m.k] * s[m.amp] * Math.sin(m.k * th + TAU * s[m.ph]);
+    return v;
+  }
+  function points(s, N) {
+    const p = new Array(N);
+    for (let i = 0; i < N; i++) {
+      const th = TAU * i / N, R = r(th, s);
+      p[i] = [R * Math.cos(th), -R * Math.sin(th)];
+    }
+    return p;
+  }
+  const toPath = (p, dp = 4) => 'M' + p.map(q => q[0].toFixed(dp) + ' ' + q[1].toFixed(dp)).join('L') + 'Z';
+  function hull(pts) {
+    const p = pts.slice().sort((A, B) => A[0] - B[0] || A[1] - B[1]);
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const q of p) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+    for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+    up.pop(); lo.pop();
+    return lo.concat(up);
+  }
+  function polyArea(p) {
+    let A = 0;
+    for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length]; A += a[0] * b[1] - b[0] * a[1]; }
+    return Math.abs(A) / 2;
+  }
+  function stats(s) {
+    const N = 1440, p = points(s, N);
+    let A2 = 0, P = 0, cx = 0, cy = 0, rmin = Infinity, rmax = -Infinity;
+    for (let i = 0; i < N; i++) {
+      const [x1, y1] = p[i], [x2, y2] = p[(i + 1) % N];
+      const cr = x1 * y2 - x2 * y1;
+      A2 += cr; cx += (x1 + x2) * cr; cy += (y1 + y2) * cr;
+      P += Math.hypot(x2 - x1, y2 - y1);
+      const R = r(TAU * i / N, s); if (R < rmin) rmin = R; if (R > rmax) rmax = R;
+    }
+    const A = Math.abs(A2) / 2;
+    cx /= 3 * A2; cy /= 3 * A2;
+    const H = hull(p), Ah = polyArea(H);
+    let fmin = Infinity, fmax = 0;
+    for (let j = 0; j < 180; j++) {
+      const phi = Math.PI * j / 180, c = Math.cos(phi), sn = Math.sin(phi);
+      let lo = Infinity, hi = -Infinity;
+      for (const q of H) { const v = q[0] * c + q[1] * sn; if (v < lo) lo = v; if (v > hi) hi = v; }
+      const w = hi - lo; if (w < fmin) fmin = w; if (w > fmax) fmax = w;
+    }
+    return { A, P, circ: 4 * Math.PI * A / (P * P), deq: 2 * Math.sqrt(A / Math.PI), sol: A / Ah, ar: fmax / fmin, rmin, rmax, cx, cy };
+  }
+
+  // ---------- shared SVG markup ----------
+  // ns = non-scaling strokes (live view); otherwise px = user units per output pixel (export).
+  const strokes = (ns, px) => ({
+    sw: n => ns ? `stroke-width="${n}" vector-effect="non-scaling-stroke"` : `stroke-width="${(n * px).toFixed(5)}"`,
+    dash: (a, b) => ns ? `${a} ${b}` : `${(a * px).toFixed(5)} ${(b * px).toFixed(5)}`
+  });
+  function gridMarkup(V, o) {
+    const showGrid = $('showGrid').checked, showBase = $('showBase').checked;
+    let s = '';
+    if (showGrid) {
+      for (let R = 0.5; R <= V + 1e-9; R += 0.5) {
+        if (Math.abs(R - 1) < 1e-9 && showBase) continue;
+        s += `<circle r="${R}" fill="none" stroke="${o.line}" stroke-opacity="0.65" ${o.st.sw(1)}/>`;
+      }
+      for (let j = 0; j < 12; j++) {
+        const t = TAU * j / 12;
+        s += `<line x1="0" y1="0" x2="${(V * Math.cos(t)).toFixed(4)}" y2="${(-V * Math.sin(t)).toFixed(4)}" stroke="${o.line}" stroke-opacity="0.65" ${o.st.sw(1)}/>`;
+      }
+      const k = V / 1.9, fs = (0.085 * k).toFixed(4);
+      const lbl = (t, x, y, a) => `<text x="${x.toFixed(4)}" y="${y.toFixed(4)}" font-size="${fs}" fill="${o.label}" text-anchor="${a}" font-family="${MATHFONT}">${t}</text>`;
+      s += lbl('0', V - 0.04 * k, -0.04 * k, 'end') + lbl('π/2', 0.04 * k, -V + 0.11 * k, 'start') +
+           lbl('π', -V + 0.04 * k, -0.04 * k, 'start') + lbl('3π/2', 0.04 * k, V - 0.05 * k, 'start');
+    }
+    if (showBase) s += `<circle r="1" fill="none" stroke="${o.line}" ${o.st.sw(1.3)} stroke-dasharray="${o.st.dash(5, 4)}"/>`;
+    return s;
+  }
+  function modesMarkup(o) {
+    if (!$('showModes').checked) return '';
+    let s = '';
+    for (const m of MODES) {
+      const s1 = { ...S }; for (const q of MODES) if (q !== m) s1[q.amp] = 0;
+      const col = o.css ? `class="${m.cls}"` : `stroke="${o.colors[m.tok]}"`;
+      s += `<path d="${toPath(points(s1, 360))}" fill="none" ${col} ${o.st.sw(1.6)} stroke-dasharray="${o.st.dash(6, 4)}"/>`;
+    }
+    return s;
+  }
+
+  // ---------- equation ----------
+  function eqHTML() {
+    const term = m => `<span class="t" data-k="${m.k}">${trim(S['w' + m.k])}<i class="v">${m.amp}</i>&#8202;sin(${m.k}<i class="v">θ</i> + 2π<i class="v">${m.ph}</i>)</span>`;
+    return `<span class="t"><i class="v">r</i>(<i class="v">θ</i>) = 1</span> ` + MODES.map(m => '+ ' + term(m)).join(' ');
+  }
+  function liveText() {
+    return '= 1 ' + MODES.map(m => `+ ${fmt(S['w' + m.k] * S[m.amp])} sin(${m.k}θ + ${fmt(TAU * S[m.ph])})`).join(' ') + '   (phases in rad)';
+  }
+  function eqSegs() {
+    const s = [['r', 1], ['(', 0], ['θ', 1], [') = 1', 0]];
+    for (const m of MODES) s.push([` + ${trim(S['w' + m.k])}`, 0], [m.amp, 1], [` sin(${m.k}`, 0], ['θ', 1], [' + 2π', 0], [m.ph, 1], [')', 0]);
+    return s;
+  }
+  function valSegs() {
+    const keys = ['a', 'b', 'c', 'd', 'e', 'f'], s = [['(', 0]];
+    keys.forEach((k, i) => { s.push([k, 1]); if (i < 5) s.push([', ', 0]); });
+    s.push([') = (' + keys.map(k => (k === 'a' || k === 'c' || k === 'e') ? S[k].toFixed(2) : S[k].toFixed(3)).join(', ') + ')', 0]);
+    return s;
+  }
+  const tspans = segs => segs.map(([t, it]) => it ? `<tspan font-style="italic">${t}</tspan>` : `<tspan>${t}</tspan>`).join('');
+
+  // ---------- controls ----------
+  const inputs = {};
+  function makeRow(key, kind) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const step = kind === 'amp' ? 0.01 : 0.005;
+    const hint = kind === 'amp' ? 'amplitude multiplier' : 'phase, fraction of a full turn';
+    row.innerHTML = `<label class="sym" for="rng-${key}">${key}</label>
+      <input type="range" id="rng-${key}" min="0" max="1" step="${step}" aria-describedby="h-${key}">
+      <input type="number" id="num-${key}" min="0" max="1" step="${step}" aria-label="${key} value">
+      <span class="hint" id="h-${key}">${hint}</span>`;
+    const rng = row.querySelector('input[type=range]'), num = row.querySelector('input[type=number]');
+    rng.addEventListener('input', () => { S[key] = +rng.value; num.value = rng.value; update(); });
+    num.addEventListener('input', () => {
+      const v = parseFloat(num.value); if (!isFinite(v)) return;
+      S[key] = Math.min(1, Math.max(0, v)); rng.value = S[key]; update();
+    });
+    inputs[key] = [rng, num];
+    return row;
+  }
+  function buildControls() {
+    const host = $('controls');
+    for (const m of MODES) {
+      const sec = document.createElement('section');
+      sec.className = 'mode'; sec.style.setProperty('--c', m.color);
+      sec.setAttribute('aria-label', `Mode ${m.k}`);
+      const head = document.createElement('div');
+      head.className = 'mode-head';
+      head.innerHTML = `<span class="term" id="term-${m.k}"></span>
+        <label class="weight">weight <input type="number" step="0.05" min="0" max="2" id="w-${m.k}"></label>`;
+      sec.appendChild(head);
+      sec.appendChild(makeRow(m.amp, 'amp'));
+      sec.appendChild(makeRow(m.ph, 'ph'));
+      host.appendChild(sec);
+      const w = head.querySelector('input');
+      w.addEventListener('input', () => {
+        const v = parseFloat(w.value); if (!isFinite(v)) return;
+        S['w' + m.k] = Math.max(0, v); update(true);
+      });
+    }
+  }
+  function syncInputs() {
+    for (const key in inputs) {
+      const [rng, num] = inputs[key];
+      rng.value = S[key];
+      if (document.activeElement !== num) num.value = (+S[key]).toFixed(key === 'a' || key === 'c' || key === 'e' ? 2 : 3);
+    }
+    for (const m of MODES) {
+      const w = $('w-' + m.k);
+      if (document.activeElement !== w) w.value = trim(S['w' + m.k]);
+      $('term-' + m.k).innerHTML = `${trim(S['w' + m.k])}<i class="v">${m.amp}</i>&#8202;sin(${m.k}<i class="v">θ</i> + 2π<i class="v">${m.ph}</i>)`;
+    }
+  }
+
+  // ---------- live drawing ----------
+  let view = 1.9, gridDirty = true;
+  const LIVE = strokes(true);
+  function drawStats(st) {
+    const rows = [
+      ['Area A', fmt(st.A)], ['Perimeter P', fmt(st.P)],
+      ['Circularity', fmt(st.circ)], ['Solidity', fmt(st.sol)],
+      ['Equivalent diameter', fmt(st.deq)], ['Aspect ratio', fmt(st.ar)],
+      ['r min / r max', `${fmt(st.rmin)} / ${fmt(st.rmax)}`], ['Centroid offset', fmt(Math.hypot(st.cx, st.cy))]
+    ];
+    $('stats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  }
+  function update(eqChanged) {
+    const st = stats(S);
+    const need = Math.max(1.9, st.rmax * 1.1);
+    if (Math.abs(need - view) > 1e-6) {
+      view = need;
+      $('main').setAttribute('viewBox', `${-view} ${-view} ${2 * view} ${2 * view}`);
+      $('glassBlur').setAttribute('stdDeviation', (0.035 * view / 1.9).toFixed(4));
+      gridDirty = true;
+    }
+    if (gridDirty) { $('grid').innerHTML = gridMarkup(view, { line: 'currentColor', label: 'currentColor', st: LIVE }); gridDirty = false; }
+    const d = toPath(points(S, 720));
+    for (const id of ['blob', 'sheenPath', 'rim', 'clipShape', 'maskShape']) $(id).setAttribute('d', d);
+    $('centroid').setAttribute('cx', st.cx); $('centroid').setAttribute('cy', st.cy);
+    $('modes').innerHTML = modesMarkup({ css: true, st: LIVE });
+    drawStats(st);
+    if (eqChanged) $('eq').innerHTML = eqHTML();
+    $('live').textContent = liveText();
+    $('warn').textContent = st.rmin <= 0 ? `r(θ) drops to ${fmt(st.rmin)} somewhere, so the curve passes through the origin and folds over. Lower the weights.` : '';
+    syncInputs();
+    save();
+  }
+
+  // ---------- export ----------
+  function colors() {
+    const cs = getComputedStyle(root), g = n => cs.getPropertyValue(n).trim();
+    return { '--surface': g('--surface'), '--ink': g('--ink'), '--muted': g('--muted'), '--gridline': g('--gridline'),
+             '--peb': g('--peb') || prefs.color, '--mode2': g('--mode2'), '--mode3': g('--mode3'), '--mode4': g('--mode4') };
+  }
+  function fitFont(text, maxW, maxFs) {
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx.font = `${maxFs}px ${MATHFONT}`;
+    const w = ctx.measureText(text).width * 1.03;
+    return w > maxW ? maxFs * maxW / w : maxFs;
+  }
+  function fullSVG(scale) {
+    const c = colors(), W = 1200, pad = 60;
+    const eq = eqSegs(), vals = valSegs();
+    const fs1 = fitFont(eq.map(x => x[0]).join(''), W - 2 * pad, 46);
+    const fs2 = Math.min(fs1 * 0.72, fitFont(vals.map(x => x[0]).join(''), W - 2 * pad, 34));
+    const y1 = pad + fs1, y2 = y1 + fs2 * 1.7, top = y2 + 24, H = top + W;
+    const st = stats(S), V = Math.max(1.9, st.rmax * 1.1), px = 2 * V / W, ST = strokes(false, px);
+    const d = toPath(points(S, 720));
+    const grid = gridMarkup(V, { line: c['--gridline'], label: c['--gridline'], st: ST });
+    const big = V * 4;
+    const scene = `<defs>
+  <clipPath id="xc"><path d="${d}"/></clipPath>
+  <mask id="xm" maskUnits="userSpaceOnUse" x="${-big}" y="${-big}" width="${2 * big}" height="${2 * big}"><rect x="${-big}" y="${-big}" width="${2 * big}" height="${2 * big}" fill="#fff"/><path d="${d}" fill="#000"/></mask>
+  <filter id="xf" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="${(0.035 * V / 1.9).toFixed(4)}"/><feComponentTransfer><feFuncA type="linear" slope="3.2"/></feComponentTransfer></filter>
+  <linearGradient id="xs" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".45" stop-color="#fff" stop-opacity=".08"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+</defs>
+<g mask="url(#xm)">${grid}</g>
+<g clip-path="url(#xc)"><g filter="url(#xf)">${grid}</g></g>
+<path d="${d}" fill="${c['--peb']}" fill-opacity="0.6"/>
+<path d="${d}" fill="url(#xs)"/>
+<path d="${d}" fill="none" stroke="${c['--peb']}" stroke-linejoin="round" ${ST.sw(2.5)}/>
+${modesMarkup({ css: false, colors: c, st: ST })}`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W * scale}" height="${Math.round(H * scale)}" viewBox="0 0 ${W} ${H.toFixed(2)}">
+<rect width="${W}" height="${H.toFixed(2)}" fill="${c['--surface']}"/>
+<text x="${W / 2}" y="${y1.toFixed(2)}" text-anchor="middle" xml:space="preserve" style="white-space:pre" font-family="${MATHFONT}" font-size="${fs1.toFixed(2)}" fill="${c['--ink']}">${tspans(eq)}</text>
+<text x="${W / 2}" y="${y2.toFixed(2)}" text-anchor="middle" xml:space="preserve" style="white-space:pre" font-family="${MATHFONT}" font-size="${fs2.toFixed(2)}" fill="${c['--muted']}">${tspans(vals)}</text>
+<svg x="0" y="${top.toFixed(2)}" width="${W}" height="${W}" viewBox="${-V} ${-V} ${2 * V} ${2 * V}">${scene}</svg>
+</svg>`;
+    return { svg, w: W * scale, h: Math.round(H * scale) };
+  }
+  function pebbleSVG() {
+    const c = colors(), V = Math.max(1.75, stats(S).rmax * 1.05);
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${fmt(-V)} ${fmt(-V)} ${fmt(2 * V)} ${fmt(2 * V)}" width="512" height="512">\n  <path fill="${c['--peb']}" fill-opacity="0.6" d="${toPath(points(S, 360), 4)}"/>\n</svg>\n`;
+  }
+  function raster(type) {
+    const { svg, w, h } = fullSVG(2);
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        cv.toBlob(b => b ? resolve(b) : reject(new Error('the browser could not encode the image')), type, 0.95);
+      };
+      img.onerror = () => reject(new Error('the browser could not render the figure'));
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  }
+  function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+  async function download(kind) {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    try {
+      if (kind === 'svg') saveBlob(new Blob([pebbleSVG()], { type: 'image/svg+xml' }), `pebble-${stamp}.svg`);
+      else saveBlob(await raster(kind === 'png' ? 'image/png' : 'image/jpeg'), `pebble-${stamp}.${kind}`);
+      closeDl();
+    } catch (err) {
+      $('warn').textContent = `Export failed: ${err.message}. Try another browser or the SVG option.`;
+    }
+  }
+  document.querySelectorAll('[data-dl]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); download(b.dataset.dl); }));
+
+  // ---------- randomness, tweening, animation ----------
+  const randParams = () => ({ ...S, a: Math.random(), b: Math.random(), c: Math.random(), d: Math.random(), e: Math.random(), f: Math.random() });
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let tweenId = 0;
+  function goTo(target) {
+    stopAnim();
+    const from = { ...S }, id = ++tweenId, dur = reduced ? 0 : 320, t0 = performance.now();
+    const phaseDelta = (a, b) => { let d = b - a; d -= Math.round(d); return d; };
+    const step = now => {
+      if (id !== tweenId) return;
+      const u = dur ? Math.min(1, (now - t0) / dur) : 1, e = 1 - Math.pow(1 - u, 3);
+      for (const k in DEFAULT) {
+        if (k === 'b' || k === 'd' || k === 'f') { const v = from[k] + phaseDelta(from[k], target[k]) * e; S[k] = ((v % 1) + 1) % 1; }
+        else S[k] = from[k] + (target[k] - from[k]) * e;
+      }
+      if (u >= 1) for (const k in DEFAULT) S[k] = target[k];
+      update(true);
+      if (u < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  let animOn = false, last = 0;
+  function frame(now) {
+    if (!animOn) return;
+    const dt = last ? Math.min(0.05, (now - last) / 1000) : 0; last = now;
+    S.b = (S.b + 0.06 * dt) % 1;
+    S.d = ((S.d - 0.04 * dt) % 1 + 1) % 1;
+    S.f = (S.f + 0.09 * dt) % 1;
+    update(false);
+    requestAnimationFrame(frame);
+  }
+  function stopAnim() { animOn = false; $('animate').setAttribute('aria-pressed', 'false'); $('animate').textContent = 'Animate phases'; }
+  $('animate').addEventListener('click', () => {
+    if (animOn) { stopAnim(); return; }
+    tweenId++; animOn = true; last = 0;
+    $('animate').setAttribute('aria-pressed', 'true'); $('animate').textContent = 'Stop animation';
+    requestAnimationFrame(frame);
+  });
+  $('randomize').addEventListener('click', () => goTo(randParams()));
+  $('reset').addEventListener('click', () => goTo({ ...DEFAULT }));
+  for (const id of ['showGrid', 'showBase']) $(id).addEventListener('change', () => { gridDirty = true; update(false); });
+  $('showModes').addEventListener('change', () => update(false));
+
+  // ---------- suggested shapes (new random set on every load) ----------
+  // Suggestions only: Feret aspect ratio <= 1.3 and r_max/r_min <= 2.
+  // Sliders and user-defined shapes are not restricted.
+  const SUGGEST_MAX_AR = 1.3, SUGGEST_MAX_RRATIO = 2;
+  function suggestParams() {
+    let best = null, bestScore = Infinity;
+    for (let tries = 0; tries < 400; tries++) {
+      const p = randParams(), st = stats(p);
+      const ratio = st.rmin > 0 ? st.rmax / st.rmin : Infinity;
+      if (st.ar <= SUGGEST_MAX_AR && ratio <= SUGGEST_MAX_RRATIO) return { p, st };
+      // If the current weights make the limits unreachable, fall back to the closest candidate.
+      const score = Math.max(0, st.ar - SUGGEST_MAX_AR) + Math.max(0, ratio - SUGGEST_MAX_RRATIO);
+      if (score < bestScore) { bestScore = score; best = { p, st }; }
+    }
+    return best;
+  }
+  function newGallery() {
+    const g = $('gallery'); g.innerHTML = '';
+    for (let i = 0; i < 16; i++) {
+      const { p, st } = suggestParams();
+      const V = Math.max(1.75, st.rmax * 1.08);
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'thumb';
+      b.setAttribute('aria-label', `Load shape ${i + 1}`);
+      b.innerHTML = `<svg viewBox="${-V} ${-V} ${2 * V} ${2 * V}" aria-hidden="true"><path d="${toPath(points(p, 180), 3)}"/></svg>`;
+      b.addEventListener('click', () => goTo(p));
+      g.appendChild(b);
+    }
+  }
+  $('newSet').addEventListener('click', newGallery);
+
+  // ---------- copy ----------
+  function exportText(kind) {
+    const v = k => trim(S[k]), W = k => trim(S['w' + k]);
+    if (kind === 'latex') {
+      return `r(\\theta) = 1 + ${W(2)}\\,a\\sin(2\\theta + 2\\pi b) + ${W(3)}\\,c\\sin(3\\theta + 2\\pi d) + ${W(4)}\\,e\\sin(4\\theta + 2\\pi f),\n` +
+             `\\quad (a,b,c,d,e,f) = (${['a', 'b', 'c', 'd', 'e', 'f'].map(v).join(', ')})`;
+    }
+    if (kind === 'python') {
+      return `import numpy as np\n\n` +
+        `a, b, c, d, e, f = ${['a', 'b', 'c', 'd', 'e', 'f'].map(v).join(', ')}\n` +
+        `theta = np.linspace(0.0, 2.0*np.pi, 721)\n` +
+        `r = (1.0\n     + ${W(2)}*a*np.sin(2*theta + 2*np.pi*b)\n     + ${W(3)}*c*np.sin(3*theta + 2*np.pi*d)\n     + ${W(4)}*e*np.sin(4*theta + 2*np.pi*f))\n` +
+        `x, y = r*np.cos(theta), r*np.sin(theta)\n`;
+    }
+    if (kind === 'svg') return pebbleSVG();
+    const o = {}; for (const k in DEFAULT) o[k] = +S[k].toFixed(4);
+    return JSON.stringify(o, null, 2);
+  }
+  const names = { latex: 'LaTeX', python: 'Python', svg: 'SVG', json: 'Parameters' };
+  async function copy(kind) {
+    const txt = exportText(kind);
+    let ok = false;
+    try { await navigator.clipboard.writeText(txt); ok = true; } catch (e) {
+      try {
+        const ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove();
+      } catch (e2) {}
+    }
+    const t = $('toast');
+    t.textContent = ok ? `Copied ${names[kind]} to the clipboard.` : 'Clipboard access is blocked here. Select the text below to copy it.';
+    if (!ok) { const pre = document.createElement('pre'); pre.textContent = txt; pre.style.cssText = 'white-space:pre-wrap;font-size:.78rem;user-select:all;margin:6px 0 0'; t.appendChild(pre); }
+  }
+  document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => copy(b.dataset.copy)));
+
+  // ---------- equation block: hide once scrolled, restore at the top ----------
+  const pin = $('pin');
+  let collapsed = false, ticking = false;
+  function onScroll() {
+    ticking = false;
+    const y = window.scrollY || root.scrollTop || 0;
+    if (!collapsed && y > 24) { collapsed = true; pin.classList.add('collapsed'); }
+    else if (collapsed && y < 8) { collapsed = false; pin.classList.remove('collapsed'); }
+  }
+  window.addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+
+  // ---------- init ----------
+  applyTheme();
+  buildPalette();
+  setColor(prefs.color);
+  buildControls();
+  update(true);
+  newGallery();
+  onScroll();
+})();
+</script>
+</body>
+</html>
