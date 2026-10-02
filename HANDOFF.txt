@@ -1,0 +1,55 @@
+================================================================================
+  pebbleplot - HANDOFF NOTES FOR THE NEXT AGENT
+  Context for picking up work on this repo after a break. Not part of the site:
+  _redirects sends /HANDOFF.txt to the home page, so it lives only on GitHub.
+  Last updated: 2026-10-02
+================================================================================
+
+WHAT THIS IS
+  An interactive plotter for pebble shapes, r(θ) = 1 + Σ w_k·amp·sin(kθ + 2π·phase)
+  for k = 2, 3, 4. Repo: https://github.com/shyam97/pebbleplot (branch main).
+  README.md explains the math, the code layout and the tools. Read it first.
+
+FILES
+  index.html   The whole site: CSS, an early head script (theme and a random
+               favicon), then the main script. No libraries and no build step.
+  _headers     Security headers. The CSP allows only inline scripts and styles
+               plus data:/blob: images, so never add external scripts, fonts
+               or other resources.
+  _redirects   Hides internal files from the deployed site. Add any new
+               repo-only file here.
+  robots.txt   Disallows all crawlers. The page also has a noindex meta tag.
+  README.md    Public docs. Keep it in sync when math or behaviour changes.
+
+DEPLOYMENT
+  Cloudflare Pages is connected to the GitHub repo through the dashboard, and
+  every push to main deploys. Build command: none. Output directory: repo root,
+  so README.md is publicly reachable on the site.
+
+CURRENT STATE (all committed and pushed)
+  - Footer: "Conceptualized by shyam97" linking to shyamhemamalini.com, and a
+    second line "See source on GitHub" linking to the repo.
+  - Header: GitHub icon to the left of the theme and colour buttons.
+  - Centroid marker removed from the plot. The "Centroid offset" stat remains.
+  - Pebble fill opacity 0.45, set in two places: #blob in the CSS (live view)
+    and in fullSVG() (PNG/JPG export).
+  - Randomize and the suggested-shapes gallery both use randAll(): a..f from
+    U[0,1], each weight from U[0,0.4], scaled to sum <= 0.8 and rounded down to
+    2 decimals, which guarantees r >= 0.2 (no fold-over). Reset restores the
+    default weights 0.3 / 0.2 / 0.1.
+
+THINGS TO KNOW BEFORE EDITING
+  - The live view (update() plus static SVG markup) and the export (fullSVG())
+    build the pebble separately. They share only gridMarkup() and
+    modesMarkup(). A visual change to the pebble has to be made in both.
+  - The owner tried and REJECTED a heavier "liquid glass" look (magnified
+    refraction, chromatic aberration, rim highlight, drop shadow). Keep the
+    original subtle glass: a blurred grid clipped inside the pebble, a sheen
+    gradient and a rim stroke.
+  - Owner workflow: make the edit, summarise it, and commit/push only when asked.
+
+OPEN / OPTIONAL
+  - README.md is publicly served. It could be added to _redirects if the owner
+    wants it hidden.
+  - The GitHub "About" description and website URL have not been confirmed as set.
+================================================================================

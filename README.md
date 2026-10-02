@@ -111,6 +111,10 @@ Everything lives in [`index.html`](index.html): CSS in a `<style>` block and two
 - **Fonts:** system fonts only. Maths text uses STIX Two Text or Cambria Math where installed, with a serif fallback.
 - **Static hosting.** [`_headers`](_headers) sets security headers in the Netlify/Cloudflare Pages format, including a strict Content-Security-Policy that allows only inline scripts and styles and `data:`/`blob:` images. [`robots.txt`](robots.txt) and a `noindex` meta tag keep the site out of search engines.
 
+## Handoff notes
+
+[`HANDOFF.txt`](HANDOFF.txt) is a short status note for whoever works on the project next, whether a person or an AI coding agent. It covers the current state, the design decisions made so far and the open items. It lives only in this repository: [`_redirects`](_redirects) sends `/HANDOFF.txt` on the deployed site back to the home page.
+
 ## Running locally
 
 Open `index.html` in a browser. To serve it the way a host would:
