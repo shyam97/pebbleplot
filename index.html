@@ -664,6 +664,14 @@ ${modesMarkup({ css: false, colors: c, st: ST })}`;
 
   // ---------- randomness, tweening, animation ----------
   const randParams = () => ({ ...S, a: Math.random(), b: Math.random(), c: Math.random(), d: Math.random(), e: Math.random(), f: Math.random() });
+  // Randomize and the suggested shapes also redraw the weights, each in [0, 0.4], scaled down so they sum to at most 0.8.
+  // With amplitudes <= 1 that keeps r(θ) >= 0.2, so the curve never folds over.
+  function randAll() {
+    const w = [2, 3, 4].map(() => 0.4 * Math.random()), sum = w[0] + w[1] + w[2], k = sum > 0.8 ? 0.8 / sum : 1;
+    const p = randParams();
+    w.forEach((v, i) => { p['w' + (i + 2)] = Math.floor(v * k * 100) / 100; });
+    return p;
+  }
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let tweenId = 0;
   function goTo(target) {
@@ -700,7 +708,7 @@ ${modesMarkup({ css: false, colors: c, st: ST })}`;
     $('animate').setAttribute('aria-pressed', 'true'); $('animate').textContent = 'Stop animation';
     requestAnimationFrame(frame);
   });
-  $('randomize').addEventListener('click', () => goTo(randParams()));
+  $('randomize').addEventListener('click', () => goTo(randAll()));
   $('reset').addEventListener('click', () => goTo({ ...DEFAULT }));
   for (const id of ['showGrid', 'showBase']) $(id).addEventListener('change', () => { gridDirty = true; update(false); });
   $('showModes').addEventListener('change', () => update(false));
@@ -712,10 +720,10 @@ ${modesMarkup({ css: false, colors: c, st: ST })}`;
   function suggestParams() {
     let best = null, bestScore = Infinity;
     for (let tries = 0; tries < 400; tries++) {
-      const p = randParams(), st = stats(p);
+      const p = randAll(), st = stats(p);
       const ratio = st.rmin > 0 ? st.rmax / st.rmin : Infinity;
       if (st.ar <= SUGGEST_MAX_AR && ratio <= SUGGEST_MAX_RRATIO) return { p, st };
-      // If the current weights make the limits unreachable, fall back to the closest candidate.
+      // If no draw meets the limits, fall back to the closest candidate.
       const score = Math.max(0, st.ar - SUGGEST_MAX_AR) + Math.max(0, ratio - SUGGEST_MAX_RRATIO);
       if (score < bestScore) { bestScore = score; best = { p, st }; }
     }

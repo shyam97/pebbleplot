@@ -47,9 +47,11 @@ The curve is sampled at $N = 1440$ points $(x_i, y_i) = (r_i\cos\theta_i,\ r_i\s
 | Aspect ratio | $F_\max / F_\min$, the ratio of the largest to smallest Feret (caliper) diameter. Each Feret diameter is the width of the hull projected onto a direction; 180 directions are checked, one degree apart. |
 | $r_\min$ / $r_\max$ | Extremes of $r(\theta)$ over the samples |
 
-### Suggested shapes
+### Random shapes
 
-The gallery shows 16 random shapes, freshly drawn on every load or when you click "New set". Each one comes from rejection sampling: draw $a, \dots, f$ uniformly from $[0, 1]$ and keep the shape if
+**Randomize** draws $a, \dots, f$ uniformly from $[0, 1]$ and each weight $w_k$ uniformly from $[0, 0.4]$. If the weights add up to more than $0.8$, they are scaled down to sum to $0.8$, which keeps $r_\min \ge 0.2$ by the bound above, so a random shape never folds over.
+
+**Suggested shapes.** The gallery shows 16 shapes, freshly drawn on every load or when you click "New set". Each one comes from rejection sampling: make the same random draw as Randomize and keep the shape if
 
 $$
 F_\max / F_\min \le 1.3 \quad\text{and}\quad r_\max / r_\min \le 2,
