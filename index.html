@@ -122,9 +122,8 @@ i.v{font-family:"STIX Two Text","Cambria Math","Times New Roman",serif;font-styl
 svg.main{display:block;width:100%;height:auto;aspect-ratio:1/1;max-height:min(640px,calc(100vh - var(--bar-h) - 120px));margin:0 auto;color:var(--gridline);transition:max-height .28s ease}
 @media (min-width:920px){.pin:not(.collapsed) svg.main{max-height:min(640px,calc(100vh - var(--bar-h) - 270px))}}
 @media (max-width:919px){svg.main{max-height:36vh}}
-#blob{fill:var(--peb);fill-opacity:.6}
+#blob{fill:var(--peb);fill-opacity:.45}
 #rim{fill:none;stroke:var(--peb);stroke-width:1.25;stroke-linejoin:round}
-#centroid{fill:var(--surface);stroke:var(--muted)}
 .m2{stroke:var(--mode2)} .m3{stroke:var(--mode3)} .m4{stroke:var(--mode4)}
 .stage-bar{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;padding:6px 6px 0;font-size:.86rem;color:var(--muted)}
 .stage-bar label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
@@ -233,7 +232,6 @@ input:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-of
             <path id="sheenPath" fill="url(#sheen)"/>
             <path id="rim" vector-effect="non-scaling-stroke"/>
             <g id="modes"></g>
-            <circle id="centroid" r="0.025" stroke-width="1" vector-effect="non-scaling-stroke"/>
           </svg>
           <div class="dl">
             <div class="dl-menu" id="dlMenu" hidden>
@@ -575,7 +573,6 @@ input:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-of
     if (gridDirty) { $('grid').innerHTML = gridMarkup(view, { line: 'currentColor', label: 'currentColor', st: LIVE }); gridDirty = false; }
     const d = toPath(points(S, 720));
     for (const id of ['blob', 'sheenPath', 'rim', 'clipShape', 'maskShape']) $(id).setAttribute('d', d);
-    $('centroid').setAttribute('cx', st.cx); $('centroid').setAttribute('cy', st.cy);
     $('modes').innerHTML = modesMarkup({ css: true, st: LIVE });
     drawStats(st);
     if (eqChanged) $('eq').innerHTML = eqHTML();
@@ -615,7 +612,7 @@ input:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-of
 </defs>
 <g mask="url(#xm)">${grid}</g>
 <g clip-path="url(#xc)"><g filter="url(#xf)">${grid}</g></g>
-<path d="${d}" fill="${c['--peb']}" fill-opacity="0.6"/>
+<path d="${d}" fill="${c['--peb']}" fill-opacity="0.45"/>
 <path d="${d}" fill="url(#xs)"/>
 <path d="${d}" fill="none" stroke="${c['--peb']}" stroke-linejoin="round" ${ST.sw(2.5)}/>
 ${modesMarkup({ css: false, colors: c, st: ST })}`;
